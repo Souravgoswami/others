@@ -74,4 +74,6 @@ puts <<~EOF if sleep.<(0.025)
 EOF
 
 ActivityLED.check
+
+puts "Starting monitoring"
 ActivityLED.start_monitoring(pin, sleep)
