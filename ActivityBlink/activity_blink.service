@@ -1,0 +1,15 @@
+[Unit]
+Description=A simple script to send GPIO output based on storage device activity.
+
+[Service]
+Type=simple
+ExecStart=!!/usr/bin/activity_blink
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartSec=3
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
