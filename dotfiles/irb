@@ -1,0 +1,287 @@
+#!/usr/bin/ruby -w
+# The GNU General Public License v3.0
+PATCH_VERSION_ = '0.1.6'
+
+require 'irb'
+require 'io/console'
+
+STDOUT.sync = true
+
+# Handy QuickTools for quick calculations!
+module QuickTools
+	class << self
+		def colourize(arg) arg.to_s.colourize end
+		def sort_word(arg) arg.to_s.chars.sort.join end
+		def reverse_sort_word(arg) sort_word(arg).reverse end
+		def camelize(string) string.split(' ').map(&:capitalize).join(' ') end
+		def factorial(number) (2..number.to_i).reduce(&:*) end
+		def permutation(argument) argument.to_s.chars.permutation.map(&:join) end
+
+		def prime(range=100)
+			(numbers = (2..range).to_a.unshift(nil, nil)).each do |num|
+				next if num.nil?
+				return numbers.compact if (sqr = num * num) > range
+				sqr.step(range, num) { |x| numbers[x] = nil }
+			end
+		end
+
+		def prime?(n=19)
+			(2..n/2).each do |num|
+				return [false, num] if n % num == 0
+			end
+			true
+		end
+
+		def benchmark(*all_methods)
+			require 'benchmark' unless defined?(Benchmark)
+			all_methods.each do |method|
+				Benchmark.benchmark { |b| b.report("#{method.to_s}") { method } }
+			end
+			nil
+		end
+	end
+end
+
+class String
+	@@colour_set =  [(34..39), (208..213), (70..75), (136..140), (214..219), (40..45)].map(&:to_a)
+	@@colour_set.concat(@@colour_set.map(&:reverse))
+
+	def self.colours() @@colour_set.flatten.map { |temp| ("\e[38;5;#{temp.to_s}m") } end
+
+	def colourize(line_break=true, blink=false)
+		val = ''
+		each_line do |str|
+			colours = @@colour_set[0]
+
+			index, length, colours_length = 0, str.length/colours.length, colours.length
+			length = 1 if length == 0
+			val.concat("\e[5m") if blink
+			str_len, i = str.length, 0
+
+			while i < str_len do
+				index += 1 if (i % length == 0 && index < colours_length - 1) unless (i == 0 || i == 1)
+				val.concat("\e[38;5;#{colours[index]}m#{str[i]}")
+				i += 1
+			end
+
+			val.concat("\e[0m") unless val.empty?
+			val.concat("\n") if line_break
+			@@colour_set.rotate!
+		end
+		val.chomp
+	end
+
+	alias to_colour colourize
+end
+
+####################################################
+if ARGV.include?('-v') || ARGV.include?('--version')
+	puts "IRB VERSION:\t#{IRB::VERSION}".colourize
+	puts "PATCH VERSION: #{PATCH_VERSION_}".colourize
+	puts "#{RbConfig::CONFIG['RUBY_VERSION_NAME']}".capitalize.colourize
+	exit 0
+end
+
+####################################################
+
+__t__ = Time.now
+@__histfile__ = "#{ENV['HOME']}/.irb_history"
+
+# We need Width, but no height, but we would like to declare to make it usable in irb
+begin
+	Terminal_Height, Terminal_Width = STDOUT.winsize
+rescue Errno::ENOTTY
+	puts "Inappropriate ioctl for device"
+	puts "You should run this in a terminal!".colourize
+rescue Exception
+end
+
+# Read histories from file, and append it to Readline::HISTORY to make the history available in the current session!
+Readline::HISTORY.clear
+if File.readable?(@__histfile__)
+	File.open(@__histfile__, File::RDONLY) { |file| file.readlines.each { |temp| Readline::HISTORY << temp.chomp } }
+else
+	puts "#{@__histfile__} is either doesn't exist or is not readable.".colourize
+end
+@history_size = Readline::HISTORY.size
+
+# clear() clears the terminal, and resets the cursor position to the first line.
+def clear(*arg)
+	print "\e[0m\e[H\e[2J" if STDOUT.tty?
+	:clear
+end
+
+# Erase erases the screen. It doesn't reset the cursor position!
+def erase(*arg)
+	print "\e[2J" if STDOUT.tty?
+	:erase
+end
+
+# Get the histories. hist!(n) where the n implies the number of line.
+def hist!(n=1, return_value=false, *arg)
+	begin
+		data = File.readlines(@__histfile__)[n.to_i - 1]
+		unless return_value then puts data.to_s.colourize else return data end
+
+	rescue Errno::ENOENT
+		puts "#{@__histfile__} doesn't exist".colourize
+
+	rescue Errno::EACCES
+		puts "Permission Denied while tried to open #{@__histfile__}".colourize
+
+	rescue Exception => e
+		return e, e.backtrace
+	end
+	nil
+end
+
+def eval_hist!(n=1, *arg)
+	line = hist!(n, true).to_s.strip
+	puts line.colourize
+
+	if !(line.empty? || line.start_with?('eval_hist'))
+		Readline::HISTORY << line
+		eval(line)
+	elsif line.start_with?('eval_hist')
+		puts 'Uh oh! Calling method eval_history! recursively is not allowed.'.colourize
+	end
+end
+
+def history(n=0, return_val=false, *arg)
+	begin
+		histories = File.readlines(@__histfile__)[0..n.to_i - 1]
+		return histories if return_val
+
+	rescue Errno::EACCES
+		puts 'Permission Denied'.colourize
+
+	rescue Errno::ENOENT
+		puts "#{@__histfile__} doesn't exist.".colourize
+
+	rescue Exception => e
+		return e, e.backtrace
+
+	else
+		unless block_given?
+			i = 0
+			puts histories.map {  |history| i += 1 ; "#{i}    #{history.strip}".colourize }
+		else
+			histories.each { |c| yield c }
+		end
+	end
+	nil
+end
+
+def eval_all!
+	h, i = history(0, true), 0
+
+	puts "\e[1;30mWarning!This will iterate over all the histories and evalualte each one. Type 'yes' to confirm.\e[0m"
+
+	unless STDIN.gets.strip == "yes"
+		puts "\e[1;34mSkipping\e[0m"
+		return
+	end
+
+	while i < h.size
+		begin
+			puts ("-" * Terminal_Width).colourize
+			exec = h[i].strip
+
+			if exec == 'eval_all!'
+				puts "! Skipping #{exec}".colourize
+				i += 1
+				next
+			end
+
+			puts "#{i + 1}> #{exec}".colourize
+			puts (val = eval(exec)) ? "=> #{val}".colourize : "=> nil".colourize
+
+			puts ("-" * Terminal_Width).colourize
+			puts
+
+			i += 1
+
+		rescue Interrupt
+			exit! 0
+
+		rescue Exception => e
+			puts "\e[1;31m#{e}"
+			i += 1
+			retry
+		end
+	end
+end
+
+def get_history_size(*arg) puts "#{File.size(@__histfile__).to_s.reverse.gsub(/\d{1,3}/).to_a.join(',').reverse} bytes".colourize if File.readable?(@__histfile__) end
+def get_history_lines(*arg) puts File.readlines(@__histfile__).count.to_s.colourize if File.readable?(@__histfile__) end
+
+def delete_history(*arg)
+		if File.writable?(@__histfile__)
+			puts 'Remove history? (N/y)'.colourize
+			if STDIN.gets.downcase.strip == 'y'
+				File.delete(@__histfile__)
+				puts "File #{@__histfile__} deleted".colourize
+			else
+				puts "Not Deleted".colourize
+			end
+		else
+			puts "#{@__histfile__} doesn't exist. Nothing to do.".colourize
+		end
+	nil
+end
+
+def write_history(*arg)
+	begin
+		histories = Readline::HISTORY.to_a[@history_size..-1].map(&:strip)
+		histories.delete('write_history')
+		histories.delete('save_history')
+
+		File.open(@__histfile__, 'a') { |file| file.puts(histories) }
+		puts "#{histories.size} #{histories.size == 1 ? 'line has been' : 'lines have been'} written to #{@__histfile__}".colourize
+
+	rescue Errno::EACESS
+		puts "#{@__histfile__} is not writable. Permission denied.".colourize
+	end
+	nil
+end
+
+def printenv(*arg) puts ENV.each { |temp| puts "#{temp[0]} => #{temp[1]}".colourize } ; nil end
+def config(*arg) RbConfig::CONFIG.to_a.each { |c| puts "#{c[0]} => #{c[1]}".colourize } ; nil end
+
+# Aliases
+alias clear! clear
+alias erase! erase
+alias history! history
+alias hist hist!
+alias eval_hist eval_hist!
+alias write_history! write_history
+
+# require gems!
+ARGV.each_with_index { |gem, temp|
+	text = "require '#{gem}'"
+	printf("%02d  ", temp + 1)
+	print text.colourize(false)
+	print ' ' * ((Terminal_Width/3 - text.length).abs + 1)
+
+	begin
+ 		puts("# => #{require(gem)}".colourize)
+
+	rescue LoadError => e
+		puts "! #{e}".colourize(true, true)
+	end
+}
+puts unless ARGV.empty?
+
+ARGV.clear
+
+# TODO: Uncomment to Enable TracePoint before starting IRB
+# TracePoint.new(:call) { |tp| p [tp.lineno, tp.defined_class, tp.method_id] }.enable
+
+IRB.start(__FILE__)
+
+at_exit do
+	etime = (Time.now - __t__).to_i
+	minutes, seconds = etime/60, etime % 60
+	puts "Exiting after #{minutes} #{minutes == 1 ? 'minute' : 'minutes' } #{seconds} #{seconds == 1 ? 'second' : 'seconds' }.".colourize
+	write_history
+end

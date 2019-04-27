@@ -1,0 +1,27 @@
+#
+# ~/.bashrc
+#
+
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
+#####################################################################
+declare -x PS1="\[\033[38;5;204m\]\342\224\214\342\224\204\[\033[38;5;34m\]\342\224\204[\[\033[38;5;35m\]\u\[\033[38;5;36m\]:\[\033[38;5;37m\]:\[\033[38;5;38m\]\h\[\033[38;5;39m\]]\342\224\210\[\033[38;5;219m\][\[\033[38;5;218m\]\w\[\033[38;5;217m\]]\n\[\033[38;5;204m\]\342\224\224\[\033[38;5;205m\]\342\224\200\[\033[38;5;206m\]\342\224\200\342\225\274\[\033[38;5;207m\]\342\256\232\[\e[0m\] "
+
+export PATH=$PATH:/home/sourav/.gem/ruby/2.6.0/bin
+
+cowspeak
+
+alias c=clear
+alias nano='nano -wl'
+alias ls='ls -sahl --color=auto'
+alias off='xrandr --output eDP1 --off'
+alias on='xrandr --output eDP1 --auto'
+alias mkrb='echo "#!/usr/bin/ruby -w " >> main.rb ; nano main.rb'
+alias irb=/home/sourav/.irb
+alias neofetch='neofetch | lolcat'
+alias bluetooth='sudo systemctl start bluetooth'
+alias detect='sudo nmap -O 192.168.2.2-10'
+
+# Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
+export PATH="$PATH:$HOME/.rvm/bin"
